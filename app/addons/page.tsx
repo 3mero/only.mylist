@@ -21,9 +21,10 @@ export default function AddonsPage() {
           {
             manifest_version: 3,
             name: "YouTube Playlist Manager",
-            version: "3.0",
+            version: "4.0",
             description: "Add YouTube videos to your playlists with custom mini popup interface",
-            permissions: ["activeTab", "storage"],
+            permissions: ["activeTab", "storage", "scripting"],
+            host_permissions: ["*://*.youtube.com/*"],
             content_scripts: [
               {
                 matches: ["*://*.youtube.com/*"],
@@ -55,7 +56,7 @@ export default function AddonsPage() {
         ),
 
         "content.js": `
-// YouTube Playlist Manager Content Script - Mini Popup Version
+// YouTube Playlist Manager Content Script - Enhanced User Playlists Version
 (function() {
   'use strict';
 
@@ -213,7 +214,6 @@ export default function AddonsPage() {
     }).observe(document, { subtree: true, childList: true });
   }
 
-  // Create mini popup HTML
   function createMiniPopup() {
     const popup = document.createElement('div');
     popup.id = 'playlist-mini-popup';
@@ -226,6 +226,28 @@ export default function AddonsPage() {
         <img class="video-thumbnail" src="/placeholder.svg" alt="Video thumbnail">
         <div class="video-details">
           <div class="video-title"></div>
+          <div class="video-actions">
+            <button class="action-btn copy-btn" onclick="copyVideoLink()" title="نسخ الرابط">
+              📋
+            </button>
+            <button class="action-btn play-btn" onclick="playVideoPopup()" title="تشغيل في نافذة منبثقة">
+              ▶️
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="create-playlist-section">
+        <div class="create-playlist-toggle" onclick="toggleCreatePlaylist()">
+          <span class="create-icon">➕</span>
+          <span>إنشاء قائمة جديدة</span>
+          <span class="arrow">▼</span>
+        </div>
+        <div class="create-playlist-form" id="createPlaylistForm" style="display: none;">
+          <input type="text" id="newPlaylistName" placeholder="اسم قائمة التشغيل الجديدة" maxlength="50">
+          <div class="form-buttons">
+            <button class="create-btn" onclick="createNewPlaylist()">إنشاء</button>
+            <button class="cancel-btn" onclick="toggleCreatePlaylist()">إلغاء</button>
+          </div>
         </div>
       </div>
       <div class="playlists-container">
@@ -247,8 +269,8 @@ export default function AddonsPage() {
     currentVideoData = videoData;
     
     // Position popup with better boundary checking
-    const popupWidth = 320;
-    const popupHeight = 400;
+    const popupWidth = 350;
+    const popupHeight = 450;
     const margin = 10;
     
     let left = Math.min(x, window.innerWidth - popupWidth - margin);
@@ -269,7 +291,7 @@ export default function AddonsPage() {
     title.textContent = videoData.title;
     
     // Load playlists
-    loadPlaylists();
+    loadUserPlaylists();
     
     // Show popup with animation
     setTimeout(() => {
@@ -290,7 +312,7 @@ export default function AddonsPage() {
     }
   };
 
-  function loadPlaylists() {
+  function loadUserPlaylists() {
     const container = miniPopup.querySelector('.playlists-container');
     
     // Get playlists from localStorage (synced with main app)
@@ -307,29 +329,101 @@ export default function AddonsPage() {
       }
     }
     
-    // Add "Recent Videos" as first option
     const playlistsHTML = \`
-      <div class="playlist-item" onclick="addToPlaylist('recent-videos', 'مقاطع حديثة')">
+      <div class="playlist-item recent-videos" onclick="addToPlaylist('recent-videos', 'مقاطع حديثة')">
         <div class="playlist-icon">📺</div>
-        <div class="playlist-name">مقاطع حديثة</div>
-        <button class="add-btn">+</button>
+        <div class="playlist-info">
+          <div class="playlist-name">مقاطع حديثة</div>
+          <div class="playlist-count">قائمة التشغيل الافتراضية</div>
+        </div>
+        <button class="add-btn" title="إضافة إلى مقاطع حديثة">+</button>
       </div>
-      \${playlists.map(playlist => \`
+      \${playlists.length > 0 ? playlists.map(playlist => \`
         <div class="playlist-item" onclick="addToPlaylist('\${playlist.id}', '\${playlist.name}')">
           <div class="playlist-icon">📋</div>
-          <div class="playlist-name">\${playlist.name}</div>
-          <button class="add-btn">+</button>
+          <div class="playlist-info">
+            <div class="playlist-name">\${playlist.name}</div>
+            <div class="playlist-count">\${playlist.videos ? playlist.videos.length : 0} فيديو</div>
+          </div>
+          <button class="add-btn" title="إضافة إلى \${playlist.name}">+</button>
         </div>
-      \`).join('')}
-      <div class="playlist-item create-new" onclick="createNewPlaylist()">
-        <div class="playlist-icon">➕</div>
-        <div class="playlist-name">إنشاء قائمة جديدة</div>
-        <button class="add-btn">+</button>
-      </div>
+      \`).join('') : '<div class="no-playlists">لا توجد قوائم تشغيل. قم بإنشاء قائمة جديدة أعلاه.</div>'}
     \`;
     
     container.innerHTML = playlistsHTML;
   }
+
+  window.toggleCreatePlaylist = function() {
+    const form = document.getElementById('createPlaylistForm');
+    const arrow = miniPopup.querySelector('.arrow');
+    
+    if (form.style.display === 'none') {
+      form.style.display = 'block';
+      arrow.textContent = '▲';
+      // Focus on input
+      setTimeout(() => {
+        const input = document.getElementById('newPlaylistName');
+        if (input) input.focus();
+      }, 100);
+    } else {
+      form.style.display = 'none';
+      arrow.textContent = '▼';
+      // Clear input
+      const input = document.getElementById('newPlaylistName');
+      if (input) input.value = '';
+    }
+  };
+
+  window.createNewPlaylist = function() {
+    const input = document.getElementById('newPlaylistName');
+    const playlistName = input.value.trim();
+    
+    if (!playlistName) {
+      showNotification('يرجى إدخال اسم قائمة التشغيل', 'error');
+      return;
+    }
+    
+    if (playlistName.length < 2) {
+      showNotification('اسم قائمة التشغيل قصير جداً', 'error');
+      return;
+    }
+    
+    // Check if playlist name already exists
+    const playlists = JSON.parse(localStorage.getItem('playlists') || '[]');
+    const exists = playlists.some(p => p.name.toLowerCase() === playlistName.toLowerCase());
+    
+    if (exists) {
+      showNotification('اسم قائمة التشغيل موجود بالفعل', 'error');
+      return;
+    }
+    
+    const newPlaylist = {
+      id: 'playlist-' + Date.now(),
+      name: playlistName,
+      videos: [
+        {
+          ...currentVideoData,
+          addedAt: new Date().toISOString(),
+          customTitle: currentVideoData.title
+        }
+      ],
+      createdAt: new Date().toISOString()
+    };
+    
+    playlists.push(newPlaylist);
+    localStorage.setItem('playlists', JSON.stringify(playlists));
+    
+    syncWithMainApp('CREATE_PLAYLIST', newPlaylist);
+    
+    showNotification(\`تم إنشاء قائمة "\${playlistName}" وإضافة الفيديو إليها\`, 'success');
+    
+    // Reset form
+    input.value = '';
+    toggleCreatePlaylist();
+    
+    // Reload playlists
+    loadUserPlaylists();
+  };
 
   // Add video to playlist and sync with main app
   window.addToPlaylist = function(playlistId, playlistName) {
@@ -351,6 +445,9 @@ export default function AddonsPage() {
         localStorage.setItem('recentVideos', JSON.stringify(recentVideos));
         
         syncWithMainApp('ADD_TO_RECENT', newVideo);
+        showNotification(\`تم إضافة الفيديو إلى \${playlistName}\`, 'success');
+      } else {
+        showNotification('الفيديو موجود بالفعل في مقاطع حديثة', 'warning');
       }
     } else {
       // Add to specific playlist
@@ -369,41 +466,51 @@ export default function AddonsPage() {
           localStorage.setItem('playlists', JSON.stringify(playlists));
           
           syncWithMainApp('ADD_TO_PLAYLIST', { playlistId, video: newVideo });
+          showNotification(\`تم إضافة الفيديو إلى \${playlistName}\`, 'success');
+          
+          // Update playlist count in UI
+          loadUserPlaylists();
+        } else {
+          showNotification(\`الفيديو موجود بالفعل في \${playlistName}\`, 'warning');
         }
       }
     }
     
-    // Show success notification
-    showNotification(\`تم إضافة الفيديو إلى \${playlistName}\`);
     closeMiniPopup();
   };
 
-  // Create new playlist and sync with main app
-  window.createNewPlaylist = function() {
-    const playlistName = prompt('اسم قائمة التشغيل الجديدة:');
-    if (playlistName && playlistName.trim()) {
-      const playlists = JSON.parse(localStorage.getItem('playlists') || '[]');
-      const newPlaylist = {
-        id: 'playlist-' + Date.now(),
-        name: playlistName.trim(),
-        videos: [
-          {
-            ...currentVideoData,
-            addedAt: new Date().toISOString(),
-            customTitle: currentVideoData.title
-          }
-        ],
-        createdAt: new Date().toISOString()
-      };
-      
-      playlists.push(newPlaylist);
-      localStorage.setItem('playlists', JSON.stringify(playlists));
-      
-      syncWithMainApp('CREATE_PLAYLIST', newPlaylist);
-      
-      showNotification(\`تم إنشاء قائمة "\${playlistName}" وإضافة الفيديو إليها\`);
-      closeMiniPopup();
-    }
+  window.copyVideoLink = function() {
+    if (!currentVideoData || !currentVideoData.url) return;
+    
+    navigator.clipboard.writeText(currentVideoData.url).then(() => {
+      showNotification('تم نسخ رابط الفيديو', 'success');
+    }).catch(() => {
+      // Fallback for older browsers
+      const textArea = document.createElement('textarea');
+      textArea.value = currentVideoData.url;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      showNotification('تم نسخ رابط الفيديو', 'success');
+    });
+  };
+
+  window.playVideoPopup = function() {
+    if (!currentVideoData || !currentVideoData.url) return;
+    
+    const popupWidth = 854;
+    const popupHeight = 480;
+    const left = (screen.width - popupWidth) / 2;
+    const top = (screen.height - popupHeight) / 2;
+    
+    window.open(
+      currentVideoData.url,
+      'videoPopup',
+      \`width=\${popupWidth},height=\${popupHeight},left=\${left},top=\${top},scrollbars=yes,resizable=yes\`
+    );
+    
+    showNotification('تم فتح الفيديو في نافذة منبثقة', 'success');
   };
 
   function syncWithMainApp(action, data) {
@@ -427,15 +534,23 @@ export default function AddonsPage() {
     }
   }
 
-  function showNotification(message) {
+  function showNotification(message, type = 'success') {
     const notification = document.createElement('div');
-    notification.className = 'playlist-notification';
-    notification.textContent = message;
+    notification.className = \`playlist-notification \${type}\`;
+    
+    const icon = type === 'success' ? '✅' : type === 'error' ? '❌' : '⚠️';
+    notification.innerHTML = \`<span class="notification-icon">\${icon}</span><span>\${message}</span>\`;
+    
     document.body.appendChild(notification);
     
     setTimeout(() => {
       if (document.body.contains(notification)) {
-        document.body.removeChild(notification);
+        notification.classList.add('fade-out');
+        setTimeout(() => {
+          if (document.body.contains(notification)) {
+            document.body.removeChild(notification);
+          }
+        }, 300);
       }
     }, 3000);
   }
@@ -446,16 +561,16 @@ export default function AddonsPage() {
     initialize();
   }
 
-  console.log('YouTube Playlist Manager v3.0 loaded - Right-click detection active');
+  console.log('YouTube Playlist Manager v4.0 loaded - Enhanced User Playlists');
 })();
 `,
 
         "styles.css": `
-/* Mini Popup Styles */
+/* Enhanced Mini Popup Styles with User Playlists */
 #playlist-mini-popup {
   position: fixed;
-  width: 320px;
-  max-height: 400px;
+  width: 350px;
+  max-height: 500px;
   background: white;
   border-radius: 12px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
@@ -515,7 +630,7 @@ export default function AddonsPage() {
   border-bottom: 1px solid #f0f0f0;
   display: flex;
   gap: 12px;
-  align-items: center;
+  align-items: flex-start;
 }
 
 .video-thumbnail {
@@ -540,6 +655,133 @@ export default function AddonsPage() {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  margin-bottom: 8px;
+}
+
+/* Enhanced video actions with copy and play buttons */
+.video-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.action-btn {
+  background: #f5f5f5;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 24px;
+}
+
+.action-btn:hover {
+  background: #e9e9e9;
+  border-color: #ccc;
+}
+
+.copy-btn:hover {
+  background: #e3f2fd;
+  border-color: #2196f3;
+}
+
+.play-btn:hover {
+  background: #fff3e0;
+  border-color: #ff9800;
+}
+
+/* Create playlist section with dropdown form */
+.create-playlist-section {
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.create-playlist-toggle {
+  padding: 12px 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background 0.2s;
+  font-size: 13px;
+  font-weight: 500;
+  color: #333;
+}
+
+.create-playlist-toggle:hover {
+  background: #f8f9fa;
+}
+
+.create-icon {
+  font-size: 14px;
+  color: #4caf50;
+}
+
+.arrow {
+  margin-right: auto;
+  font-size: 10px;
+  color: #666;
+  transition: transform 0.2s;
+}
+
+.create-playlist-form {
+  padding: 12px 16px;
+  background: #f8f9fa;
+  border-top: 1px solid #f0f0f0;
+}
+
+.create-playlist-form input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 13px;
+  margin-bottom: 8px;
+  direction: rtl;
+  text-align: right;
+}
+
+.create-playlist-form input:focus {
+  outline: none;
+  border-color: #4caf50;
+  box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
+}
+
+.form-buttons {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.create-btn, .cancel-btn {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.create-btn {
+  background: #4caf50;
+  color: white;
+}
+
+.create-btn:hover {
+  background: #45a049;
+}
+
+.cancel-btn {
+  background: #f5f5f5;
+  color: #666;
+  border: 1px solid #ddd;
+}
+
+.cancel-btn:hover {
+  background: #e9e9e9;
 }
 
 .playlists-container {
@@ -548,10 +790,11 @@ export default function AddonsPage() {
   padding: 8px 0;
 }
 
+/* Enhanced playlist items with better info display */
 .playlist-item {
   display: flex;
   align-items: center;
-  padding: 10px 16px;
+  padding: 12px 16px;
   cursor: pointer;
   transition: background 0.2s;
   gap: 12px;
@@ -561,9 +804,13 @@ export default function AddonsPage() {
   background: #f8f9fa;
 }
 
-.playlist-item.create-new {
-  border-top: 1px solid #f0f0f0;
-  color: #666;
+.playlist-item.recent-videos {
+  background: linear-gradient(135deg, #e3f2fd, #f0f8ff);
+  border-bottom: 1px solid #e1f5fe;
+}
+
+.playlist-item.recent-videos:hover {
+  background: linear-gradient(135deg, #bbdefb, #e1f5fe);
 }
 
 .playlist-icon {
@@ -573,12 +820,24 @@ export default function AddonsPage() {
   flex-shrink: 0;
 }
 
-.playlist-name {
+.playlist-info {
   flex: 1;
+  min-width: 0;
+}
+
+.playlist-name {
   font-size: 13px;
   font-weight: 500;
   color: #333;
-  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-bottom: 2px;
+}
+
+.playlist-count {
+  font-size: 11px;
+  color: #666;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -588,8 +847,8 @@ export default function AddonsPage() {
   background: #4caf50;
   color: white;
   border: none;
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   font-size: 14px;
   font-weight: bold;
@@ -606,6 +865,14 @@ export default function AddonsPage() {
   transform: scale(1.1);
 }
 
+.no-playlists {
+  text-align: center;
+  padding: 20px;
+  color: #666;
+  font-size: 13px;
+  font-style: italic;
+}
+
 .loading {
   text-align: center;
   padding: 20px;
@@ -613,7 +880,7 @@ export default function AddonsPage() {
   font-size: 13px;
 }
 
-/* Notification Styles */
+/* Enhanced notification system with types */
 .playlist-notification {
   position: fixed;
   top: 20px;
@@ -631,6 +898,27 @@ export default function AddonsPage() {
   word-wrap: break-word;
   direction: rtl;
   text-align: right;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: opacity 0.3s ease;
+}
+
+.playlist-notification.error {
+  background: #f44336;
+}
+
+.playlist-notification.warning {
+  background: #ff9800;
+}
+
+.playlist-notification.fade-out {
+  opacity: 0;
+}
+
+.notification-icon {
+  font-size: 16px;
+  flex-shrink: 0;
 }
 
 @keyframes slideIn {
@@ -664,9 +952,9 @@ export default function AddonsPage() {
 `,
 
         "background.js": `
-// Background script for YouTube Playlist Manager - Mini Popup Version
+// Background script for YouTube Playlist Manager - Enhanced User Playlists
 chrome.runtime.onInstalled.addListener(() => {
-  console.log('YouTube Playlist Manager v3.0 installed');
+  console.log('YouTube Playlist Manager v4.0 installed');
 });
 
 // Listen for messages from content script
@@ -723,6 +1011,22 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       display: block;
       margin-bottom: 6px;
     }
+    .feature-list {
+      list-style: none;
+      padding: 0;
+      margin: 8px 0 0 0;
+    }
+    .feature-list li {
+      padding: 4px 0;
+      font-size: 12px;
+      color: #666;
+    }
+    .feature-list li:before {
+      content: "✓ ";
+      color: #4caf50;
+      font-weight: bold;
+      margin-left: 6px;
+    }
     .button { 
       background: linear-gradient(135deg, #ff4444, #cc0000);
       color: white; 
@@ -767,13 +1071,19 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   </div>
   
   <div class="feature">
-    <strong>الميزات الجديدة:</strong>
-    واجهة منبثقة مصغرة تظهر عند النقر بالزر الأيمن على أي فيديو في يوتيوب مع عرض جميع قوائم التشغيل المتاحة
+    <strong>المميزات الجديدة في v4.0:</strong>
+    <ul class="feature-list">
+      <li>عرض قوائم التشغيل الفعلية من التطبيق الرئيسي</li>
+      <li>نموذج إنشاء قائمة تشغيل جديدة مع التحقق من الصحة</li>
+      <li>أزرار نسخ الرابط وتشغيل الفيديو</li>
+      <li>عداد الفيديوهات لكل قائمة تشغيل</li>
+      <li>إشعارات محسنة مع أنواع مختلفة</li>
+    </ul>
   </div>
   
   <div class="feature">
     <strong>كيفية الاستخدام:</strong>
-    انقر بالزر الأيمن على أي فيديو في يوتيوب لفتح الواجهة المنبثقة واختيار قائمة التشغيل المطلوبة
+    انقر بالزر الأيمن على أي فيديو في يوتيوب لفتح الواجهة المنبثقة المحسنة مع جميع قوائم التشغيل الخاصة بك
   </div>
   
   <button class="button" id="openMainAppBtn">فتح التطبيق الرئيسي</button>
@@ -782,7 +1092,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     💡 تأكد من أن التطبيق الرئيسي مفتوح في تبويب آخر لضمان مزامنة قوائم التشغيل بشكل صحيح وفوري.
   </div>
   
-  <div class="version">الإصدار 3.0 - واجهة منبثقة محسنة</div>
+  <div class="version">الإصدار 4.0 - قوائم تشغيل المستخدم المحسنة</div>
   
   <script src="popup.js"></script>
 </body>
@@ -834,7 +1144,7 @@ document.addEventListener('DOMContentLoaded', function() {
       const url = URL.createObjectURL(content)
       const a = document.createElement("a")
       a.href = url
-      a.download = "youtube-playlist-manager-v3.zip"
+      a.download = "youtube-playlist-manager-v4.zip"
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
@@ -872,7 +1182,7 @@ document.addEventListener('DOMContentLoaded', function() {
             <div className="flex-1 space-y-4">
               <div>
                 <h2 className="text-2xl font-semibold font-serif text-card-foreground mb-2">
-                  أداة يوتيوب v3.0 - واجهة منبثقة مصغرة
+                  أداة يوتيوب v4.0 - قوائم تشغيل المستخدم المحسنة
                 </h2>
                 <p className="text-muted-foreground leading-relaxed">
                   إضافة متصفح محدثة بالكامل مع واجهة منبثقة مصغرة تظهر عند النقر بالزر الأيمن على أي فيديو في يوتيوب.
@@ -882,23 +1192,27 @@ document.addEventListener('DOMContentLoaded', function() {
               </div>
 
               <div className="bg-muted/30 p-4 rounded-lg space-y-2">
-                <h3 className="font-semibold text-sm text-card-foreground">المميزات الجديدة في v3.0:</h3>
+                <h3 className="font-semibold text-sm text-card-foreground">المميزات الجديدة في v4.0:</h3>
                 <ul className="text-sm text-muted-foreground space-y-1">
                   <li className="flex items-center gap-2">
                     <MousePointer2 className="h-3 w-3 text-primary" />
-                    واجهة منبثقة مصغرة تظهر عند النقر بالزر الأيمن
+                    عرض قوائم التشغيل الفعلية من التطبيق الرئيسي
                   </li>
                   <li className="flex items-center gap-2">
                     <Chrome className="h-3 w-3 text-primary" />
-                    عرض مصغرات الفيديوهات وتفاصيلها في الواجهة
+                    نموذج إنشاء قائمة تشغيل جديدة مع التحقق من الصحة
                   </li>
                   <li className="flex items-center gap-2">
                     <Youtube className="h-3 w-3 text-primary" />
-                    إصلاح مشاكل ترميز النصوص العربية (UTF-8)
+                    أزرار نسخ الرابط وتشغيل الفيديو
                   </li>
                   <li className="flex items-center gap-2">
                     <MousePointer2 className="h-3 w-3 text-primary" />
-                    إمكانية إنشاء قوائم تشغيل جديدة مباشرة من الواجهة
+                    عداد الفيديوهات لكل قائمة تشغيل
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <MousePointer2 className="h-3 w-3 text-primary" />
+                    إشعارات محسنة مع أنواع مختلفة
                   </li>
                 </ul>
               </div>
@@ -909,7 +1223,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white px-8 py-3 text-lg shadow-lg hover:shadow-xl transition-all duration-200"
               >
                 <Download className="h-5 w-5 ml-2" />
-                {isDownloading ? "جاري التحميل..." : "تحميل الإضافة v3.0"}
+                {isDownloading ? "جاري التحميل..." : "تحميل الإضافة v4.0"}
               </Button>
             </div>
           </div>
