@@ -173,7 +173,7 @@ export function Navbar({ onToggleSidebar }: NavbarProps) {
       </div>
 
       {showAbout && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-start justify-center p-4 pt-20">
           <Card className="bg-background/95 backdrop-blur-md border-border/50 shadow-xl max-w-md w-full p-6 animate-fade-in">
             <div className="text-center space-y-4">
               <div className="w-16 h-16 mx-auto rounded-lg overflow-hidden">
