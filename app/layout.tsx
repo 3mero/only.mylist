@@ -16,9 +16,14 @@ const manrope = Manrope({
 })
 
 export const metadata: Metadata = {
-  title: "يوتيوب العربي - مشغل الفيديوهات المتقدم",
-  description: "مشغل فيديوهات يوتيوب متقدم مع إدارة قوائم التشغيل",
+  title: "قوائم التشغيل التلقائية لليوتيوب - مشغل الفيديوهات المتقدم",
+  description: "مشغل فيديوهات يوتيوب متقدم مع إدارة قوائم التشغيل التلقائية",
   generator: "v0.app",
+  icons: {
+    icon: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/icon16-m2akPXgXr1HbmpbUG62jquO2aPVVB2.png",
+    shortcut: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/icon16-m2akPXgXr1HbmpbUG62jquO2aPVVB2.png",
+    apple: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/icon16-m2akPXgXr1HbmpbUG62jquO2aPVVB2.png",
+  },
 }
 
 export default function RootLayout({
