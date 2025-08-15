@@ -139,11 +139,10 @@ export default function AddonsPage() {
     }
   };
 
-  // Load playlists from main app via postMessage to Vercel URL
   function loadPlaylists() {
     const container = miniPopup.querySelector('.playlists-container');
     
-    // Try to get playlists from localStorage first (synced with main app)
+    // Get playlists from localStorage (synced with main app)
     const storedPlaylists = localStorage.getItem('playlists');
     
     let playlists = [];
@@ -155,17 +154,6 @@ export default function AddonsPage() {
       } catch (e) {
         console.error('Error parsing playlists:', e);
       }
-    }
-    
-    // Also try to sync with main app if it's open
-    try {
-      // Send message to main app to get latest playlists
-      window.postMessage({
-        type: 'GET_PLAYLISTS_FROM_EXTENSION',
-        source: 'youtube-extension'
-      }, 'https://onlymylist-beryl.vercel.app');
-    } catch (e) {
-      console.log('Could not sync with main app:', e);
     }
     
     // Add "Recent Videos" as first option
@@ -211,7 +199,6 @@ export default function AddonsPage() {
         recentVideos.unshift(newVideo);
         localStorage.setItem('recentVideos', JSON.stringify(recentVideos));
         
-        // Sync with main app
         syncWithMainApp('ADD_TO_RECENT', newVideo);
       }
     } else {
@@ -230,7 +217,6 @@ export default function AddonsPage() {
           playlist.videos.push(newVideo);
           localStorage.setItem('playlists', JSON.stringify(playlists));
           
-          // Sync with main app
           syncWithMainApp('ADD_TO_PLAYLIST', { playlistId, video: newVideo });
         }
       }
@@ -262,7 +248,6 @@ export default function AddonsPage() {
       playlists.push(newPlaylist);
       localStorage.setItem('playlists', JSON.stringify(playlists));
       
-      // Sync with main app
       syncWithMainApp('CREATE_PLAYLIST', newPlaylist);
       
       showNotification(\`تم إنشاء قائمة "\${playlistName}" وإضافة الفيديو إليها\`);
@@ -272,139 +257,23 @@ export default function AddonsPage() {
 
   function syncWithMainApp(action, data) {
     try {
-      // Try to communicate with main app via postMessage
-      window.postMessage({
-        type: 'EXTENSION_SYNC',
-        action: action,
-        data: data,
-        source: 'youtube-extension'
-      }, 'https://onlymylist-beryl.vercel.app');
-      
-      // Also try to open main app in background for sync
+      // Use Chrome extension messaging for internal communication
       if (typeof chrome !== 'undefined' && chrome.runtime) {
         chrome.runtime.sendMessage({
           action: 'syncWithMainApp',
           type: action,
           data: data
+        }).catch(e => {
+          console.log('Chrome extension messaging not available:', e);
         });
       }
-    } catch (e) {
-      console.log('Sync with main app failed:', e);
-    }
-  }
-
-  // Listen for right-click events on video elements with improved detection
-  document.addEventListener('contextmenu', function(e) {
-    // Prevent multiple popups
-    if (miniPopup) {
-      closeMiniPopup();
-      return;
-    }
-    
-    const videoElement = findVideoElement(e.target);
-    if (videoElement) {
-      e.preventDefault();
-      e.stopPropagation();
       
-      const videoData = extractVideoData(videoElement);
-      if (videoData && videoData.url && videoData.id) {
-        console.log('Right-click detected on video:', videoData.title);
-        showMiniPopup(e.pageX, e.pageY, videoData);
-      }
+      // Set a flag in localStorage to indicate data has been updated
+      localStorage.setItem('extensionDataUpdated', Date.now().toString());
+      
+    } catch (e) {
+      console.log('Sync attempt completed with localStorage fallback');
     }
-  }, true); // Use capture phase for better detection
-
-  // Close popup when clicking outside
-  document.addEventListener('click', function(e) {
-    if (miniPopup && !miniPopup.contains(e.target)) {
-      closeMiniPopup();
-    }
-  });
-
-  function findVideoElement(target) {
-    let element = target;
-    let attempts = 0;
-    const maxAttempts = 10;
-    
-    while (element && element !== document.body && attempts < maxAttempts) {
-      // Check for various YouTube video container selectors
-      if (element.matches && (
-        element.matches('ytd-video-renderer') ||
-        element.matches('ytd-compact-video-renderer') ||
-        element.matches('ytd-grid-video-renderer') ||
-        element.matches('ytd-rich-item-renderer') ||
-        element.matches('ytd-thumbnail') ||
-        element.matches('.ytd-video-preview') ||
-        element.matches('[href*="/watch?v="]') ||
-        element.matches('a[title]') ||
-        element.querySelector('a[href*="/watch?v="]')
-      )) {
-        return element;
-      }
-      element = element.parentElement;
-      attempts++;
-    }
-    return null;
-  }
-
-  function extractVideoData(videoElement) {
-    let titleElement = videoElement.querySelector('#video-title, #video-title-link, a[title], .ytd-video-meta-block a, h3 a, [aria-label]');
-    let linkElement = videoElement.querySelector('a[href*="/watch?v="]') || titleElement;
-    const thumbnailElement = videoElement.querySelector('img');
-    
-    // If no direct link found, check if the element itself is a link
-    if (!linkElement && videoElement.href && videoElement.href.includes('/watch?v=')) {
-      linkElement = videoElement;
-    }
-    
-    // If still no link, traverse up to find one
-    if (!linkElement) {
-      let parent = videoElement;
-      while (parent && parent !== document.body) {
-        const link = parent.querySelector('a[href*="/watch?v="]');
-        if (link) {
-          linkElement = link;
-          break;
-        }
-        parent = parent.parentElement;
-      }
-    }
-
-    let videoUrl = '';
-    let videoTitle = 'فيديو غير معروف';
-    let videoId = '';
-
-    if (linkElement && linkElement.href) {
-      videoUrl = linkElement.href;
-      // Extract video ID from URL
-      const urlMatch = videoUrl.match(/[?&]v=([^&]+)/);
-      if (urlMatch) {
-        videoId = urlMatch[1];
-      }
-    }
-
-    if (titleElement) {
-      videoTitle = titleElement.textContent?.trim() || 
-                  titleElement.title?.trim() || 
-                  titleElement.getAttribute('aria-label')?.trim() || 
-                  'فيديو غير معروف';
-    }
-
-    // Get thumbnail URL
-    let thumbnailUrl = '';
-    if (thumbnailElement && thumbnailElement.src) {
-      thumbnailUrl = thumbnailElement.src;
-    } else if (videoId) {
-      // Generate YouTube thumbnail URL
-      thumbnailUrl = \`https://img.youtube.com/vi/\${videoId}/mqdefault.jpg\`;
-    }
-
-    return {
-      url: videoUrl,
-      title: videoTitle,
-      id: videoId,
-      thumbnail: thumbnailUrl
-    };
   }
 
   function showNotification(message) {
@@ -419,19 +288,6 @@ export default function AddonsPage() {
       }
     }, 3000);
   }
-
-  // Listen for messages from main app
-  window.addEventListener('message', function(event) {
-    if (event.origin === 'https://onlymylist-beryl.vercel.app' && event.data.type === 'PLAYLIST_UPDATE') {
-      // Update local storage with latest playlists from main app
-      if (event.data.playlists) {
-        localStorage.setItem('playlists', JSON.stringify(event.data.playlists));
-      }
-      if (event.data.recentVideos) {
-        localStorage.setItem('recentVideos', JSON.stringify(event.data.recentVideos));
-      }
-    }
-  });
 
   console.log('YouTube Playlist Manager v3.0 loaded - Right-click on any video to add to playlists');
 })();
