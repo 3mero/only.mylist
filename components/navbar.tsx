@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Search, Menu, Moon, Sun, Play } from "lucide-react"
+import { Search, Menu, Moon, Sun, Play, Info } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
@@ -21,6 +21,7 @@ export function Navbar({ onToggleSidebar }: NavbarProps) {
   const [searchQuery, setSearchQuery] = useState("")
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
   const [showResults, setShowResults] = useState(false)
+  const [showAbout, setShowAbout] = useState(false)
   const { darkMode, toggleDarkMode, playlists, recentVideos, playVideo } = usePlaylist()
 
   useEffect(() => {
@@ -82,10 +83,14 @@ export function Navbar({ onToggleSidebar }: NavbarProps) {
           </Button>
 
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-gradient-to-br from-primary to-secondary rounded-lg flex items-center justify-center">
-              <span className="text-primary-foreground font-bold text-sm">ي</span>
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center overflow-hidden">
+              <img
+                src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/icon16-m2akPXgXr1HbmpbUG62jquO2aPVVB2.png"
+                alt="YouTube Icon"
+                className="w-full h-full object-contain"
+              />
             </div>
-            <h1 className="text-xl font-bold text-foreground font-serif">يوتيوب العربي</h1>
+            <h1 className="text-xl font-bold text-foreground font-serif">قوائم التشغيل التلقائية لليوتيوب</h1>
           </div>
         </div>
 
@@ -150,6 +155,15 @@ export function Navbar({ onToggleSidebar }: NavbarProps) {
           <Button
             variant="ghost"
             size="icon"
+            onClick={() => setShowAbout(true)}
+            className="hover:bg-accent/80 transition-all duration-200 hover:scale-105 rounded-full"
+          >
+            <Info className="h-5 w-5" />
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={toggleDarkMode}
             className="hover:bg-accent/80 transition-all duration-200 hover:scale-105 rounded-full"
           >
@@ -157,6 +171,31 @@ export function Navbar({ onToggleSidebar }: NavbarProps) {
           </Button>
         </div>
       </div>
+
+      {showAbout && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <Card className="bg-background/95 backdrop-blur-md border-border/50 shadow-xl max-w-md w-full p-6 animate-fade-in">
+            <div className="text-center space-y-4">
+              <div className="w-16 h-16 mx-auto rounded-lg overflow-hidden">
+                <img
+                  src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/icon16-m2akPXgXr1HbmpbUG62jquO2aPVVB2.png"
+                  alt="YouTube Icon"
+                  className="w-full h-full object-contain"
+                />
+              </div>
+              <h2 className="text-xl font-bold text-foreground font-serif">حول التطبيق</h2>
+              <div className="text-sm text-muted-foreground space-y-2">
+                <p>تم إنشاء هذه الصفحة عبر الذكاء الاصطناعي عبر v0.app</p>
+                <p>للمستخدم: عمر</p>
+                <p>البريد الإلكتروني: alomar3363@gmail.com</p>
+              </div>
+              <Button onClick={() => setShowAbout(false)} className="w-full mt-4">
+                إغلاق
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
     </nav>
   )
 }
