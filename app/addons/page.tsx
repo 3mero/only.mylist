@@ -163,7 +163,7 @@ export default function AddonsPage() {
       window.postMessage({
         type: 'GET_PLAYLISTS_FROM_EXTENSION',
         source: 'youtube-extension'
-      }, 'https://only.mylist.vercel.app');
+      }, 'https://onlymylist-beryl.vercel.app');
     } catch (e) {
       console.log('Could not sync with main app:', e);
     }
@@ -278,7 +278,7 @@ export default function AddonsPage() {
         action: action,
         data: data,
         source: 'youtube-extension'
-      }, 'https://only.mylist.vercel.app');
+      }, 'https://onlymylist-beryl.vercel.app');
       
       // Also try to open main app in background for sync
       if (typeof chrome !== 'undefined' && chrome.runtime) {
@@ -422,7 +422,7 @@ export default function AddonsPage() {
 
   // Listen for messages from main app
   window.addEventListener('message', function(event) {
-    if (event.origin === 'https://only.mylist.vercel.app' && event.data.type === 'PLAYLIST_UPDATE') {
+    if (event.origin === 'https://onlymylist-beryl.vercel.app' && event.data.type === 'PLAYLIST_UPDATE') {
       // Update local storage with latest playlists from main app
       if (event.data.playlists) {
         localStorage.setItem('playlists', JSON.stringify(event.data.playlists));
@@ -613,7 +613,7 @@ export default function AddonsPage() {
   animation: slideIn 0.3s ease;
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   font-size: 14px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
   max-width: 300px;
   word-wrap: break-word;
   direction: rtl;
@@ -782,18 +782,40 @@ document.addEventListener('DOMContentLoaded', function() {
   
   if (openMainAppBtn) {
     openMainAppBtn.addEventListener('click', function() {
-      chrome.tabs.create({ url: 'https://only.mylist.vercel.app/' });
+      chrome.tabs.create({ url: 'https://onlymylist-beryl.vercel.app/' });
     });
   }
 });
 `,
       }
 
+      const iconFiles = {
+        "icon16.png":
+          "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/icon16-i7ZNZitMAUMGYNFh9DNOodGXPQ02uF.png",
+        "icon48.png":
+          "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/icon48-Lo23XxlhHFgCuUkUEFzilaK3twPaFq.png",
+        "icon128.png":
+          "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/icon128-oc2yQUl3w1MzITeynrfDI7NTb0la0G.png",
+      }
+
       // Create and download ZIP file
       const zip = new JSZipModule()
+
+      // Add text files
       Object.entries(extensionFiles).forEach(([filename, content]) => {
         zip.file(filename, content)
       })
+
+      // Add icon files
+      for (const [filename, url] of Object.entries(iconFiles)) {
+        try {
+          const response = await fetch(url)
+          const blob = await response.blob()
+          zip.file(filename, blob)
+        } catch (error) {
+          console.error(`Error loading icon ${filename}:`, error)
+        }
+      }
 
       const content = await zip.generateAsync({ type: "blob" })
       const url = URL.createObjectURL(content)
