@@ -1,12 +1,11 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Search, Menu, Moon, Sun, Play, Puzzle } from "lucide-react"
+import { Search, Menu, Moon, Sun, Play } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
 import { usePlaylist } from "@/contexts/playlist-context"
-import Link from "next/link"
 
 interface NavbarProps {
   onToggleSidebar: () => void
@@ -148,17 +147,6 @@ export function Navbar({ onToggleSidebar }: NavbarProps) {
         </div>
 
         <div className="flex items-center gap-3">
-          <Link href="/addons">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="hover:bg-accent/80 transition-all duration-200 hover:scale-105 rounded-full"
-              title="الإضافات والأدوات"
-            >
-              <Puzzle className="h-5 w-5" />
-            </Button>
-          </Link>
-
           <Button
             variant="ghost"
             size="icon"
