@@ -62,6 +62,157 @@ export default function AddonsPage() {
   let miniPopup = null;
   let currentVideoData = null;
 
+  function initializeRightClickDetection() {
+    // Remove any existing listeners
+    document.removeEventListener('contextmenu', handleRightClick, true);
+    
+    // Add right-click listener to the document
+    document.addEventListener('contextmenu', handleRightClick, true);
+    
+    console.log('[YouTube Extension] Right-click detection initialized');
+  }
+
+  function handleRightClick(event) {
+    // Find the closest video element
+    const videoElement = findVideoElement(event.target);
+    
+    if (videoElement) {
+      event.preventDefault(); // Prevent default context menu
+      event.stopPropagation();
+      
+      const videoData = extractVideoData(videoElement);
+      if (videoData) {
+        console.log('[YouTube Extension] Video detected:', videoData.title);
+        showMiniPopup(event.clientX, event.clientY, videoData);
+      }
+    }
+  }
+
+  function findVideoElement(target) {
+    // Check multiple selectors for different YouTube layouts
+    const videoSelectors = [
+      'ytd-video-renderer',
+      'ytd-compact-video-renderer', 
+      'ytd-grid-video-renderer',
+      'ytd-rich-item-renderer',
+      'ytd-video-meta-block',
+      'ytd-thumbnail',
+      '#dismissible',
+      '.ytd-video-renderer',
+      '.ytd-compact-video-renderer'
+    ];
+    
+    let element = target;
+    let attempts = 0;
+    const maxAttempts = 10;
+    
+    while (element && element !== document && attempts < maxAttempts) {
+      // Check if current element matches any video selector
+      for (const selector of videoSelectors) {
+        if (element.matches && element.matches(selector)) {
+          return element;
+        }
+      }
+      
+      // Check if element contains video-related classes or attributes
+      if (element.className && typeof element.className === 'string') {
+        if (element.className.includes('video') || 
+            element.className.includes('ytd-') ||
+            element.hasAttribute('data-context-item-id')) {
+          return element;
+        }
+      }
+      
+      element = element.parentElement;
+      attempts++;
+    }
+    
+    return null;
+  }
+
+  function extractVideoData(videoElement) {
+    try {
+      let videoId = null;
+      let title = 'فيديو يوتيوب';
+      let thumbnail = null;
+      let url = null;
+      
+      // Try to get video ID from various sources
+      const linkElement = videoElement.querySelector('a[href*="/watch?v="]') || 
+                         videoElement.querySelector('a[href*="/shorts/"]');
+      
+      if (linkElement) {
+        const href = linkElement.getAttribute('href');
+        if (href) {
+          if (href.includes('/watch?v=')) {
+            videoId = href.split('v=')[1]?.split('&')[0];
+          } else if (href.includes('/shorts/')) {
+            videoId = href.split('/shorts/')[1]?.split('?')[0];
+          }
+          
+          if (videoId) {
+            url = \`https://www.youtube.com/watch?v=\${videoId}\`;
+          }
+        }
+      }
+      
+      // Try to get title
+      const titleElement = videoElement.querySelector('#video-title') ||
+                          videoElement.querySelector('.ytd-video-meta-block #video-title') ||
+                          videoElement.querySelector('a[title]') ||
+                          videoElement.querySelector('h3 a') ||
+                          videoElement.querySelector('[aria-label]');
+      
+      if (titleElement) {
+        title = titleElement.getAttribute('title') || 
+                titleElement.getAttribute('aria-label') || 
+                titleElement.textContent?.trim() || 
+                title;
+      }
+      
+      // Try to get thumbnail
+      const thumbnailElement = videoElement.querySelector('img') ||
+                              videoElement.querySelector('ytd-thumbnail img');
+      
+      if (thumbnailElement) {
+        thumbnail = thumbnailElement.src || thumbnailElement.getAttribute('data-src');
+      }
+      
+      // Generate thumbnail URL from video ID if not found
+      if (!thumbnail && videoId) {
+        thumbnail = \`https://img.youtube.com/vi/\${videoId}/mqdefault.jpg\`;
+      }
+      
+      if (videoId && url) {
+        return {
+          id: videoId,
+          title: title.substring(0, 100), // Limit title length
+          url: url,
+          thumbnail: thumbnail
+        };
+      }
+      
+    } catch (error) {
+      console.error('[YouTube Extension] Error extracting video data:', error);
+    }
+    
+    return null;
+  }
+
+  function initialize() {
+    initializeRightClickDetection();
+    
+    // Re-initialize when YouTube navigates (SPA behavior)
+    let lastUrl = location.href;
+    new MutationObserver(() => {
+      const url = location.href;
+      if (url !== lastUrl) {
+        lastUrl = url;
+        setTimeout(initializeRightClickDetection, 1000);
+      }
+    }).observe(document, { subtree: true, childList: true });
+  }
+
   // Create mini popup HTML
   function createMiniPopup() {
     const popup = document.createElement('div');
@@ -289,7 +440,13 @@ export default function AddonsPage() {
     }, 3000);
   }
 
-  console.log('YouTube Playlist Manager v3.0 loaded - Right-click on any video to add to playlists');
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initialize);
+  } else {
+    initialize();
+  }
+
+  console.log('YouTube Playlist Manager v3.0 loaded - Right-click detection active');
 })();
 `,
 
